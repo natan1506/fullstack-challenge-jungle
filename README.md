@@ -1,5 +1,61 @@
 # Desafio Full-stack - Crash Game 🎮
 
+## Solução — Natan Souza 👨‍💻
+
+### Setup
+
+```bash
+git clone https://github.com/natan1506/fullstack-challenge-jungle.git
+cd fullstack-challenge-jungle
+bun install
+bun run docker:up
+```
+
+Acesse `http://localhost:3000` e faça login com `player` / `player123`. O saldo inicial de R$1.000 é configurado automaticamente pelo seed.
+
+### Decisões de Arquitetura
+
+#### DDD com dois bounded contexts
+
+Cada serviço tem separação estrita em camadas: `domain` (entidades, VOs, interfaces de repositório), `application` (use-cases), `infrastructure` (TypeORM, RabbitMQ, JWT) e `presentation` (controllers, gateway WebSocket). Nenhuma camada de infraestrutura vaza para o domínio.
+
+**Game Service** gerencia o ciclo de vida completo da rodada via `RoundEngineService` — loop assíncrono que alterna entre fase de apostas (20s) e fase de jogo, emitindo eventos WebSocket a cada 100ms. O agregado `Round` encapsula todas as invariantes: aposta dupla por jogador, aposta fora da fase de apostas, cashout sem aposta ativa.
+
+**Wallet Service** é estritamente reativo — não recebe chamadas REST para débito/crédito, apenas consome eventos do RabbitMQ. O VO `Money` garante que nenhuma operação monetária usa ponto flutuante; todas as persistências são `BIGINT` em centavos.
+
+#### Comunicação assíncrona e consistência
+
+O Game Service publica dois eventos no RabbitMQ:
+
+- `wallet.debit` — ao confirmar uma aposta (débita o valor da carteira)
+- `wallet.credit` — ao confirmar um cashout (credita o payout)
+
+O Wallet Service consome com **DLQ** (`wallet.debit.dlq` / `wallet.credit.dlq`) para mensagens que falham após todas as tentativas, `prefetch(1)` para processamento ordenado, e **idempotência via Set em memória** keyed por `betId` — evita duplo crédito/débito em caso de reentrega.
+
+O cashout usa **concorrência otimística**: `UPDATE bets SET status='won' WHERE id=$1 AND status='pending'` — se `affected = 0`, a aposta já foi liquidada e retorna `ConflictException`. Isso elimina a race condition sem precisar de lock explícito.
+
+#### Provably Fair
+
+Crash point gerado via `HMAC-SHA256(serverSeed, roundId)` com house edge de 1%. O hash dos primeiros 8 bytes do HMAC determina o multiplicador. O `serverSeed` é revelado apenas após o crash — antes, o frontend exibe apenas o `SHA256(serverSeed)`. Qualquer jogador pode verificar via `GET /games/rounds/:id/verify`.
+
+#### Frontend
+
+Vite + React com TanStack Query para server state e Zustand para estado do jogo. O gráfico do multiplicador é um canvas 2D desenhado a cada tick WebSocket — curva exponencial com fill gradiente, ponto animado na ponta e efeito de shake + flash vermelho no crash. shadcn/ui para os componentes base (Button, Card, Input, Badge).
+
+O WebSocket conecta via Kong (`http://localhost:8000/socket.io`) — todo tráfego, REST e WS, passa pelo gateway.
+
+### Trade-offs
+
+| Decisão                        | Alternativa                        | Motivo                                                                                                                        |
+| ------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Idempotência em memória (Set)  | Tabela `processed_events` no banco | Suficiente para o escopo; a alternativa é o padrão correto para produção                                                      |
+| Loop síncrono no RoundEngine   | Agenda com cron/Bull               | Mais simples, sem dependência extra; Bull seria necessário para múltiplas instâncias                                          |
+| Canvas 2D manual               | Recharts / Victory                 | Controle total sobre animação e performance a 10fps                                                                           |
+| `BIGINT` em string no JSON     | Número                             | JavaScript não representa `BIGINT` > 2^53 com precisão; serialização segura                                                   |
+| RabbitMQ sem volume persistido | Volume Docker                      | Evita conflito de permissão do `.erlang.cookie` no Docker Desktop (macOS/Windows); filas são recriadas pelo código no startup |
+
+## Desafio
+
 ## Bem-vindo à Jungle Gaming 🦧
 
 A **Jungle Gaming** é uma software house especializada em iGaming — desenvolvemos plataformas de cassino online com tecnologia de ponta: NestJS, Bun, TanStack, DDD e arquitetura orientada a eventos. Somos apaixonados por engenharia de software e acreditamos que grandes produtos nascem de grandes times.
@@ -270,7 +326,7 @@ cp services/wallets/.env.example services/wallets/.env
 ### Comandos
 
 ```bash
-git clone https://github.com/junglegaming/fullstack-challenge
+git clone https://github.com/natan1506/fullstack-challenge-jungle.git
 cd fullstack-challenge
 bun install
 bun run docker:up      # Sobe tudo (infra + serviços + frontend)

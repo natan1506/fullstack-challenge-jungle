@@ -1,7 +1,5 @@
 services:
-  # ---------------------------------------------------------------------------
-  # PostgreSQL 18
-  # ---------------------------------------------------------------------------
+  # ── Banco de dados relacional ──────────────────────────────────────────────
   postgres:
     image: postgres:18.3-alpine
     ports:
@@ -12,17 +10,15 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_EXTRA_DATABASES: games,wallets
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # ---------------------------------------------------------------------------
-  # RabbitMQ (with management UI)
-  # ---------------------------------------------------------------------------
+  # ── Message broker ─────────────────────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:4.2.4-management-alpine
     ports:
@@ -31,44 +27,50 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      # Cookie fixo evita conflito de permissão em ambientes onde o Erlang
+      # não consegue criar/ler ~/.erlang.cookie (Docker Desktop no macOS)
+      RABBITMQ_ERLANG_COOKIE: "jungle-secret-cookie"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # check_port_connectivity garante que as portas AMQP estão abertas (ping passa antes disso)
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 10s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 15
+      start_period: 20s
 
-  # ---------------------------------------------------------------------------
-  # Keycloak (Identity Provider)
-  # ---------------------------------------------------------------------------
+  # ── Identity provider (OIDC / OAuth2) ─────────────────────────────────────
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.5
-    command: start-dev --import-realm
+    command: start-dev --import-realm --spi-theme-cache-themes=false --spi-theme-cache-templates=false
     ports:
       - "8080:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
+      # KC 25+ aceita URL completa em KC_HOSTNAME (KC_HOSTNAME_URL foi removido).
+      # Garante que todos os tokens tenham iss=http://localhost:8080 independente
+      # de quem chamou (seed via keycloak:8080 interno ou browser via localhost:8080)
+      KC_HOSTNAME: http://localhost:8080
     volumes:
       - ./docker/keycloak:/opt/keycloak/data/import:ro
+      - ./docker/keycloak/themes:/opt/keycloak/themes:ro
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200'"]
+      # KC 26+ expõe health na porta 9000 (separada da porta principal 8080)
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 30s
+      retries: 20
+      start_period: 60s
 
-  # ---------------------------------------------------------------------------
-  # Kong (API Gateway — DB-less / declarative)
-  # ---------------------------------------------------------------------------
+  # ── API Gateway ────────────────────────────────────────────────────────────
   kong:
     image: kong:3.9.1
     ports:
-      - "8000:8000"
-      - "8443:8443"
-      - "8001:8001"
+      - "8000:8000" # proxy
+      - "8443:8443" # proxy TLS
+      - "8001:8001" # admin API
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/kong.yml
@@ -90,9 +92,7 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # ---------------------------------------------------------------------------
-  # Games Service
-  # ---------------------------------------------------------------------------
+  # ── Serviço de jogos (rounds, bets, WebSocket) ────────────────────────────
   games:
     build:
       context: ./services/games
@@ -107,15 +107,14 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4001/health || exit 1"]
-      interval: 10s
-      timeout: 5s
+      # nc (netcat busybox) verifica se a porta TCP está aberta — curl não existe na imagem bun:alpine
+      test: ["CMD-SHELL", "nc -z localhost 4001 || exit 1"]
+      interval: 5s
+      timeout: 3s
       retries: 10
       start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Wallets Service
-  # ---------------------------------------------------------------------------
+  # ── Serviço de carteiras (saldo, débito/crédito) ──────────────────────────
   wallets:
     build:
       context: ./services/wallets
@@ -130,24 +129,40 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4002/health || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "nc -z localhost 4002 || exit 1"]
+      interval: 5s
+      timeout: 3s
       retries: 10
       start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Frontend (placeholder — candidate implements)
-  # ---------------------------------------------------------------------------
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - kong
+  # ── Frontend (React + Vite, servido via nginx) ────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - kong
+
+  # ── Seed de dados iniciais (roda uma vez e sai) ───────────────────────────
+  seed:
+    image: oven/bun:1-alpine
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts
+      - ./package.json:/app/package.json
+      - ./bun.lock:/app/bun.lock
+      - ./node_modules:/app/node_modules
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      WALLETS_URL: http://wallets:4002
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/wallets
+    command: bun run scripts/seed.ts
+    depends_on:
+      - wallets
+      - keycloak
+    restart: on-failure
 
 volumes:
   postgres_data:
-  rabbitmq_data:

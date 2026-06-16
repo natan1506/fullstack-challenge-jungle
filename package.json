@@ -7,11 +7,16 @@
     "frontend"
   ],
   "scripts": {
-    "docker:up": "docker compose up",
+    "docker:up": "docker compose up --build -d; docker compose logs -f",
     "docker:down": "docker compose down",
-    "docker:prune": "docker compose down -v --rmi all --remove-orphans && docker volume prune -f"
+    "docker:prune": "docker compose down -v --rmi all --remove-orphans && docker volume prune -f",
+    "seed": "bun run scripts/seed.ts",
+    "test": "bun test services/wallets/tests/unit && bun test services/games/tests/unit"
   },
   "devDependencies": {
     "bun-types": "latest"
+  },
+  "dependencies": {
+    "pg": "^8.21.0"
   }
 }

@@ -1,0 +1,164 @@
+body {
+  background: #0a0a0f !important;
+  font-family: system-ui, sans-serif;
+}
+
+.login-pf body {
+  background: #0a0a0f;
+}
+
+#kc-header-wrapper {
+  color: #a855f7 !important;
+  font-size: 1.5rem;
+  font-weight: 900;
+  text-align: center;
+  padding: 1.5rem 0 0.5rem;
+  letter-spacing: 0.05em;
+}
+
+#kc-header-wrapper::before {
+  content: "🎰 ";
+}
+
+.card-pf {
+  background: #13131a !important;
+  border: 1px solid #1f1f2e !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 0 40px rgba(168, 85, 247, 0.1) !important;
+}
+
+.login-pf-page .card-pf {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+#kc-form-login label,
+.pf-v5-c-form__label,
+label {
+  color: #9ca3af !important;
+  font-size: 0.875rem;
+}
+
+/* Input wrapper — o Keycloak envolve o password em .pf-v5-c-input-group */
+.pf-v5-c-input-group,
+.pf-v5-c-form-control__utilities {
+  background: #1a1a27 !important;
+  border: 1px solid #2d2d44 !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+}
+
+.pf-v5-c-form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+  background: #1a1a27 !important;
+  border: none !important;
+  color: #f1f1f1 !important;
+  border-radius: 0 !important;
+  padding: 0.625rem 0.875rem !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Remove bordas brancas do wrapper quando dentro do input-group */
+.pf-v5-c-input-group .pf-v5-c-form-control {
+  border: none !important;
+  background: #1a1a27 !important;
+}
+
+.pf-v5-c-form-control:focus,
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.pf-v5-c-input-group:focus-within {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2) !important;
+}
+
+/* Botão de mostrar/esconder senha — todas as variantes de classe do Keycloak */
+button.pf-m-control,
+.pf-c-button.pf-m-control,
+.pf-v5-c-button.pf-m-control,
+.pf-v5-c-input-group button,
+.pf-v5-c-input-group .pf-v5-c-button {
+  background: #1a1a27 !important;
+  border: 1px solid #1a1a27 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #6b7280 !important;
+  padding: 0 0.75rem !important;
+  cursor: pointer !important;
+  border-radius: 0 !important;
+}
+
+button.pf-m-control:hover,
+.pf-c-button.pf-m-control:hover,
+.pf-v5-c-button.pf-m-control:hover,
+.pf-v5-c-input-group button:hover {
+  background: #22223a !important;
+  border-color: #22223a !important;
+  color: #a855f7 !important;
+  box-shadow: none !important;
+}
+
+button.pf-m-control::before,
+button.pf-m-control::after,
+.pf-c-button.pf-m-control::before,
+.pf-c-button.pf-m-control::after {
+  display: none !important;
+}
+
+button.pf-m-control svg,
+.pf-c-button.pf-m-control svg {
+  fill: currentColor !important;
+}
+
+/* Botão submit */
+.pf-v5-c-button--primary,
+#kc-login,
+input[type="submit"],
+button[type="submit"] {
+  background: #9333ea !important;
+  border-color: #9333ea !important;
+  color: #fff !important;
+  border-radius: 0.75rem !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  padding: 0.75rem !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+}
+
+.pf-v5-c-button--primary:hover,
+#kc-login:hover,
+input[type="submit"]:hover {
+  background: #7c3aed !important;
+}
+
+.alert-error,
+.pf-v5-c-alert--danger {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: #ef4444 !important;
+  border-radius: 0.5rem !important;
+  color: #fca5a5 !important;
+}
+
+#kc-page-title {
+  color: #f1f1f1 !important;
+  font-weight: 700;
+}
+
+a,
+.pf-v5-c-button--link {
+  color: #a855f7 !important;
+}
+
+a:hover {
+  color: #c084fc !important;
+}
